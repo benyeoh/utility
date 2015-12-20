@@ -6,209 +6,56 @@ import base64
 #from urllib3.exceptions import InsecureRequestWarning
 from elasticsearch import Elasticsearch
 from elasticsearch.client import IndicesClient
+
 import json
 import optparse
+import csv
+import sys
 
-# Handle option parsing
-opt_parser = optparse.OptionParser()
-opt_parser.add_option('-n', '--name', dest='name', help='Login name', 
-                      metavar='NAME', default='spire')
-opt_parser.add_option('-p', '--pwd', dest='pwd', help='Login password', 
-                      metavar='PWD', default='')
+import es_queries
 
-(opt_args, args) = opt_parser.parse_args()
-
-ES_USER = opt_args.name
-ES_PASSWD = opt_args.pwd
-ES_URL = 'https://{}:{}@truffula.pvt.spire.com/elasticsearch'.format(ES_USER, ES_PASSWD)
-
-es = Elasticsearch([ES_URL])
-print(es)
-
-search_query2 = {
-                   "query" : {
-                       "query_string" : {
-                            "_type" : {
-                                "query" : "gps_status",
-                            },
-                        },
-                   },
-                }
-
-search_query3 = {
-                   "query" : {
-                       "query_string" : {
-                            "fields" :["_type"],
-                            "query" : "gps_status",
-                        },
-                   },
-                }
-
-search_query4 = {
-                   "query" : {
-                       "match" : {
-                            "fields" :["_type"],
-                            "query" : "gps_status",
-                        },
-                   },
-                }
-
-search_query5 = {
-                   "query" : {
-                       "bool" : {
-                            "must" : {
-                                "term" : {
-                                    "_type" : "gps_status"
-                                }
-                            },
-                        },
-                   },
-                }
-
-search_query6 = {
-                   "query" : {
-                       "filtered" : {
-                           "query" : {
-                                "query_string" : {
-                                    "fields" :["_type"],
-                                    "query" : "gps*",
-                                }
-                            },
+def search(name, pwd, query):
+    ES_USER = name
+    ES_PASSWD = pwd
+    ES_URL = 'https://{}:{}@truffula.pvt.spire.com/elasticsearch'.format(ES_USER, ES_PASSWD)
     
-                            "filter": {
-                                "bool" : {
-                                    "must" : [{ "term" : { "_type" : "gps_status" } }]
-                                },
-                            },
-                        },
-                    },
-                }
+    es = Elasticsearch([ES_URL])
+    return es.search(index="spire", body=query, size=1000000000)
 
-search_query7 = {
-                    "query" : {
-                        "constant_score" : {
-                            "filter": {
-                                "term":  { 
-                                    "_type": "gps_status" 
-                                },
-                            
-                            },
-                        },
-                    },
-                }
-
-search_query8 = {
-                   "query" : {
-                       "filtered" : {
-                            "filter": {
-                                "bool" : {
-                                    "must" : #[#{ "term" : { "_type" : "gps_status" } },
-                                              { "term" : { "meta.spire_id" : "lemur-2-joel" } }
-                                            # ]
-                                },
-                            },
-                        },
-                    },
-                }
-
-search_query9 = {
-                   "query" : {
-                       "filtered" : {
-                           "query" : {
-                                "term" : {
-                                    #"fields" :["meta.spire_id"],
-                                    "meta.spire_id" : "lemur-2-joel"
-                                }
-                            },
+def dump_csv(filename, data, fields, fields_desc=None):
+    if sys.version_info >= (3,0,0):
+        f = open(filename, 'w', newline='')
+    else:
+        f = open(filename, 'wb')
     
-                            "filter": [ {
-                                "bool" : {
-                                    "must" : [{ "term" : { "_type" : "gps_status" } }]
-                                }},
-                                
-                                {       
-                                "range" : {
-                                    "meta.time" : {
-                                        "gte" : "2015-11-30",
-                                        "format": "yyyy-MM-dd"                                        
-                                    },
-                                }}
-                            ],
-                        },
-                    },
-                }
+    f = csv.writer(f)
+    f.writerow(fields)
+    if fields_desc is not None:
+        f.writerow(fields_desc)
+        
+    def _fetch_value(d, subfield):
+        for s in subfield.split("."):
+            d = d[s]
+        return d
 
-search_query10 = {
-                   "query" : {
-                       "filtered" : {
-                           "query" : {
-                                "query_string" : {
-                                    "fields" :["_type"],
-                                    "query" : "gps*",
-                                }
-                            },
+    for x in data:
+        f.writerow([_fetch_value(x, field) for field in fields])
     
-                            "filter": [ {
-                                "bool" : {
-                                    "must" : [{ "term" : { "meta.time" : "2015-11-25T09:11:49" } }]
-                                }},
-                            ],
-                        },
-                    },
-                }
-
-search_query11 = {
-                   "query" : {
-                       "query_string" : {
-                            "fields" :["meta.time"],
-                            "query" : "*",
-                        },
-                   },
-                }
-
-
-search_query = {
-                   "query" : {
-                       "filtered" : {    
-                            "filter": {
-                                "bool" : {
-                                    "must" : [
-                                        { 
-                                            "term" : { "_type" : "gps_status" } 
-                                        },
-                                        {
-                                            "term" : { "meta.spire_id.raw" : "lemur-2-chris" } 
-                                        },
-                                        {       
-                                            "range" : {
-                                                "meta.time" : {
-                                                    "gte" : "2015-11-30",
-                                                    "format": "yyyy-MM-dd"                                        
-                                                }
-                                            }
-                                        }
-                                    ],
-                                          
-                                    "must_not" : [
-                                        {
-                                            "term" : { "response.pos_x" : 0.0 }
-                                        },
-                                    ]                                        
-                                }
-                            }              
-                        }
-                    }
-                }
-
-search_query12 = {
-                   "query" : {
-                       "term" : {
-                            "meta.spire_id.raw" : "lemur-2-joel"
-                        },
-                   },
-                }
-
-matches = es.search(index="spire", body=search_query, size=300)
-hits = matches['hits']['hits']
-print(json.dumps(matches, indent=4, separators=(',', ':')))
-#print(json.dumps(hits, indent=4, separators=(',', ':')))
+if __name__ ==  '__main__':
+    # Handle option parsing
+    opt_parser = optparse.OptionParser()
+    opt_parser.add_option('-n', '--name', dest='name', help='Login name', 
+                          metavar='NAME', default='spire')
+    opt_parser.add_option('-p', '--pwd', dest='pwd', help='Login password', 
+                          metavar='PWD', default='')
+    
+    
+    (opt_args, args) = opt_parser.parse_args()
+    
+    matches = search(opt_args.name, opt_args.pwd, es_queries.query_adacs_not_nadir_sun)
+    #print(dir(matches))
+    #print(json.dumps(matches, indent=4, separators=(',', ':')))
+    dump_csv('not_nadir_sun.csv', matches['hits']['hits'], es_queries.adacs_filter, es_queries.adacs_filter_desc)
+    print('Array len: %d' % len(matches['hits']['hits']))
+    print('Total hits: %d' % matches['hits']['total'])
+    #print(json.dumps(hits, indent=4, separators=(',', ':')))
