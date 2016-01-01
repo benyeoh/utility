@@ -14,6 +14,11 @@ import sys
 
 import es_queries
 
+def _fetch_value(d, subfield):
+    for s in subfield.split("."):
+        d = d[s]
+    return d
+
 def search(name, pwd, query):
     ES_USER = name
     ES_PASSWD = pwd
@@ -33,14 +38,20 @@ def dump_csv(filename, data, fields, fields_desc=None):
     if fields_desc is not None:
         f.writerow(fields_desc)
         
-    def _fetch_value(d, subfield):
-        for s in subfield.split("."):
-            d = d[s]
-        return d
-
     for x in data:
         f.writerow([_fetch_value(x, field) for field in fields])
+
+def filter_rows_unique(data, unique_fields):
+    filtered = []
+    uniques = {}
+    for x in data:
+        check_unique = tuple([_fetch_value(x, field) for field in unique_fields])
+        if check_unique not in uniques:
+            uniques[check_unique] = True
+            filtered.append(x)
     
+    return filtered
+        
 if __name__ ==  '__main__':
     # Handle option parsing
     opt_parser = optparse.OptionParser()
@@ -48,14 +59,15 @@ if __name__ ==  '__main__':
                           metavar='NAME', default='spire')
     opt_parser.add_option('-p', '--pwd', dest='pwd', help='Login password', 
                           metavar='PWD', default='')
-    
-    
+        
     (opt_args, args) = opt_parser.parse_args()
     
-    matches = search(opt_args.name, opt_args.pwd, es_queries.query_adacs_not_nadir_sun)
+    matches = search(opt_args.name, opt_args.pwd, es_queries.query_gps)
+    print('Array len: %d' % len(matches['hits']['hits']))
+
+    filtered_matches = matches['hits']['hits']#filter_rows_unique(matches['hits']['hits'], es_queries.gps_unique_filter)
     #print(dir(matches))
     #print(json.dumps(matches, indent=4, separators=(',', ':')))
-    dump_csv('not_nadir_sun.csv', matches['hits']['hits'], es_queries.adacs_filter, es_queries.adacs_filter_desc)
-    print('Array len: %d' % len(matches['hits']['hits']))
+    dump_csv('jeroen_all_gps.csv', filtered_matches, es_queries.gps_csv_filter)
     print('Total hits: %d' % matches['hits']['total'])
     #print(json.dumps(hits, indent=4, separators=(',', ':')))
