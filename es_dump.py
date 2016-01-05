@@ -19,13 +19,13 @@ def _fetch_value(d, subfield):
         d = d[s]
     return d
 
-def search(name, pwd, query):
+def search(name, pwd, query, limit=50):
     ES_USER = name
     ES_PASSWD = pwd
     ES_URL = 'https://{}:{}@truffula.pvt.spire.com/elasticsearch'.format(ES_USER, ES_PASSWD)
     
     es = Elasticsearch([ES_URL])
-    return es.search(index="spire", body=query, size=1000000000)
+    return es.search(index="spire", body=query, size=limit)
 
 def dump_csv(filename, data, fields, fields_desc=None):
     if sys.version_info >= (3,0,0):
@@ -62,12 +62,12 @@ if __name__ ==  '__main__':
         
     (opt_args, args) = opt_parser.parse_args()
     
-    matches = search(opt_args.name, opt_args.pwd, es_queries.query_gps)
+    matches = search(opt_args.name, opt_args.pwd, es_queries.query_adacs_all, limit=1000000000)
     print('Array len: %d' % len(matches['hits']['hits']))
 
     filtered_matches = matches['hits']['hits']#filter_rows_unique(matches['hits']['hits'], es_queries.gps_unique_filter)
     #print(dir(matches))
-    #print(json.dumps(matches, indent=4, separators=(',', ':')))
-    dump_csv('jeroen_all_gps.csv', filtered_matches, es_queries.gps_csv_filter)
+    print(json.dumps(filtered_matches, indent=4, separators=(',', ':')))
+    #dump_csv('all_adacs.csv', filtered_matches, es_queries.adacs_csv_filter, es_queries.adacs_csv_filter_desc)
     print('Total hits: %d' % matches['hits']['total'])
     #print(json.dumps(hits, indent=4, separators=(',', ':')))

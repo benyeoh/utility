@@ -90,7 +90,7 @@ query_gps = {
                                 "bool" : {
                                     "must" : [
                                         { "term" : { "_type" : "gps_status" } },
-                                        { "term" : { "meta.spire_id.raw" : "lemur-2-jeroen" } },
+                                        { "term" : { "meta.spire_id.raw" : "lemur-2-chris" } },
                                         { "range" : { "meta.time" : { "gte" : "2015-10-01", "format": "yyyy-MM-dd" } } }
                                     ],
                                           
@@ -196,12 +196,12 @@ query_adacs_all = {
                 "bool" : {
                     "must" : [
                         { "term" : { "_type" : "adacs_status_std" } },
-                        { "term" : { "meta.spire_id.raw" : "lemur-2-peter" } },
+                        { "term" : { "meta.spire_id.raw" : "lemur-2-chris" } },
                         #{ "term" : { "response.acs_mode_str.raw" : "NORMAL" } },
                         #{ "term" : { "response.eclipse_flag" : 0 } },
                         { "range" : { "meta.time" : { "gte" : "2015-10-1", "format": "yyyy-MM-dd" } } }
                         #{ "range" : { "meta.time" : { "lte" : "2015-11-13", "format": "yyyy-MM-dd" } } }
-                    ],               
+                    ],
                 }
             }         
         }
