@@ -25,7 +25,7 @@ def search(name, pwd, query, limit=50):
     ES_URL = 'https://{}:{}@truffula.pvt.spire.com/elasticsearch'.format(ES_USER, ES_PASSWD)
     
     es = Elasticsearch([ES_URL])
-    return es.search(index="spire", body=query, size=limit)
+    return es.search(index="spire", body=query, size=limit, request_timeout=300, timeout=300)
 
 def dump_csv(filename, data, fields, fields_desc=None):
     if sys.version_info >= (3,0,0):
@@ -62,12 +62,12 @@ if __name__ ==  '__main__':
         
     (opt_args, args) = opt_parser.parse_args()
     
-    matches = search(opt_args.name, opt_args.pwd, es_queries.query_adacs_all, limit=1000000000)
+    matches = search(opt_args.name, opt_args.pwd, es_queries.query_adacs_sun, limit=1000000)
     print('Array len: %d' % len(matches['hits']['hits']))
 
     filtered_matches = matches['hits']['hits']#filter_rows_unique(matches['hits']['hits'], es_queries.gps_unique_filter)
     #print(dir(matches))
-    print(json.dumps(filtered_matches, indent=4, separators=(',', ':')))
-    #dump_csv('all_adacs.csv', filtered_matches, es_queries.adacs_csv_filter, es_queries.adacs_csv_filter_desc)
+    #print(json.dumps(filtered_matches, indent=4, separators=(',', ':')))
+    dump_csv('data/jeroen_all_adacs_sun.csv', filtered_matches, es_queries.adacs_csv_filter)#, es_queries.adacs_csv_filter_desc)
     print('Total hits: %d' % matches['hits']['total'])
     #print(json.dumps(hits, indent=4, separators=(',', ':')))

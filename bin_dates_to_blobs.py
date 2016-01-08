@@ -21,7 +21,8 @@ class BlobEntry:
         self.end = end
         self.is_sun = is_sun
         self.is_nadir = is_nadir
-            
+        self.count = 0
+        
     def jsonize(self):
         _jsonized = {
             "start" : self.start,
@@ -29,7 +30,8 @@ class BlobEntry:
             "start_date" : str(datetime.datetime.utcfromtimestamp(self.start)),
             "end_date" : str(datetime.datetime.utcfromtimestamp(self.end)),            
             "is_sun" : self.is_sun,
-            "is_nadir" : self.is_nadir
+            "is_nadir" : self.is_nadir,
+            "count" : self.count
         }
         
         return _jsonized
@@ -39,6 +41,20 @@ def _fetch_value(d, subfield):
         d = d[s]
     return d
 
+def dump_csv(filename, data, fields, fields_desc=None):
+    if sys.version_info >= (3,0,0):
+        f = open(filename, 'w', newline='')
+    else:
+        f = open(filename, 'wb')
+    
+    f = csv.writer(f)
+    f.writerow(fields)
+    if fields_desc is not None:
+        f.writerow(fields_desc)
+        
+    for x in data:
+        f.writerow([_fetch_value(x, field) for field in fields])
+        
 def construct_blobs(json_data):
     blobbed_data = []
     
@@ -56,7 +72,7 @@ def construct_blobs(json_data):
         
         blob = BlobEntry(start_epoch, end_epoch, is_sun, is_nadir)
         if (blob.is_sun 
-            and blob.is_nadir
+            and not blob.is_nadir
             and blob.start >= threshold_start_epoch
             and blob.end <= threshold_end_epoch):
             print("start: %s, end: %s, is_sun: %s, is_nadir: %s" % (str(start_date), str(end_date), str(is_sun), str(is_nadir)))
@@ -100,6 +116,7 @@ if __name__ ==  '__main__':
             dates = construct_dates(data)
 
     bin_count = []
+    bin_count_per_sec = []
     blob_indices = []
     cur_count = 0
     
@@ -112,6 +129,11 @@ if __name__ ==  '__main__':
             while epoch > blobs[cur_blob_index].end:
                 if cur_blob_index < (len(blobs)-1):
                     bin_count.append(cur_count)
+                    blobs[cur_blob_index].count = cur_count
+                    time_span = blobs[cur_blob_index].end - blobs[cur_blob_index].start
+                    if time_span == 0:
+                        time_span = 1
+                    bin_count_per_sec.append(cur_count / float(time_span))
                     blob_indices.append(cur_blob_index)
                     cur_blob_index += 1                    
                     cur_count = 0
@@ -119,7 +141,13 @@ if __name__ ==  '__main__':
                     break
             
     bin_count.append(cur_count)
-              
+    blobs[cur_blob_index].count = cur_count
+
+    time_span = blobs[cur_blob_index].end - blobs[cur_blob_index].start
+    if time_span == 0:
+        time_span = 1
+    bin_count_per_sec.append(cur_count / float(time_span))
+                        
     # Sum total time
     total_time = 0
     for index in blob_indices:
@@ -131,6 +159,23 @@ if __name__ ==  '__main__':
     for count in bin_count:
         total_count += count
         
+    highest_count_rate = 0
+    for rate in bin_count_per_sec:
+        if highest_count_rate < rate:
+            highest_count_rate = rate
+    
+    used_blobs = []
+    for index in blob_indices:
+        blob = blobs[index]
+        used_blobs.append(blob.jsonize())
+    
+    dump_csv("data/not_nadir.csv", used_blobs, ["start_date", "end_date", "is_sun", "is_nadir", "count"])
+    
     print("Total: %d" % len(dates))
-    print("Count: %d, Time: %d secs, Average Count Per Sec: %f" % (total_count, total_time, total_count * 1.0 /float(total_time)))
+    print("Received AIS messages: %d, Time: %d secs, Average msgs per sec: %f, Highest msg per sec: %f" % (total_count, total_time, total_count * 1.0 /float(total_time), highest_count_rate))
+    
+    #ax = plt.subplot(111)
+    #plt.title('Count')
+    #plt.bar(numpy.arange(len(bin_count_per_sec)), bin_count_per_sec)
+    #plt.show()
     

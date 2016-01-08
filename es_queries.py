@@ -5,7 +5,7 @@ search_query3 = {
                    "query" : {
                        "query_string" : {
                             "fields" :["_type"],
-                            "query" : "gps_status",
+                            "query" : "pdu*",
                         },
                    },
                 }
@@ -90,7 +90,7 @@ query_gps = {
                                 "bool" : {
                                     "must" : [
                                         { "term" : { "_type" : "gps_status" } },
-                                        { "term" : { "meta.spire_id.raw" : "lemur-2-chris" } },
+                                        { "term" : { "meta.spire_id.raw" : "lemur-2-jeroen" } },
                                         { "range" : { "meta.time" : { "gte" : "2015-10-01", "format": "yyyy-MM-dd" } } }
                                     ],
                                           
@@ -173,7 +173,7 @@ query_adacs_sun = {
                 "bool" : {
                     "must" : [
                         { "term" : { "_type" : "adacs_status_std" } },
-                        { "term" : { "meta.spire_id.raw" : "lemur-2-peter" } },
+                        { "term" : { "meta.spire_id.raw" : "lemur-2-jeroen" } },
                         #{ "term" : { "response.acs_mode_str.raw" : "NORMAL" } },
                         { "term" : { "response.eclipse_flag" : 0 } },
                         { "range" : { "meta.time" : { "gte" : "2015-10-1", "format": "yyyy-MM-dd" } } }
@@ -196,7 +196,7 @@ query_adacs_all = {
                 "bool" : {
                     "must" : [
                         { "term" : { "_type" : "adacs_status_std" } },
-                        { "term" : { "meta.spire_id.raw" : "lemur-2-chris" } },
+                        { "term" : { "meta.spire_id.raw" : "lemur-2-joel" } },
                         #{ "term" : { "response.acs_mode_str.raw" : "NORMAL" } },
                         #{ "term" : { "response.eclipse_flag" : 0 } },
                         { "range" : { "meta.time" : { "gte" : "2015-10-1", "format": "yyyy-MM-dd" } } }
@@ -212,4 +212,20 @@ query_adacs_all = {
     ]    
 }
 
+query_raw_beacons = {
+    "query": {
+        "bool": {
+            "must": [
+                { "constant_score": { "filter" : { "missing" : { "field" : "meta.beacon_processed" }}}},
+                #{ "term" : { "meta.satellite.raw" : "lemur-2-peter" }},
+                { "term" : { "_type" : "flowgraph" }},
+                { "range" : { "meta.time" : { "gte" : "2016-1-6", "format": "yyyy-MM-dd" } } }
+            ]
+        }
+    },
+                     
+    "sort": [
+        { "meta.log_time" : { "order": "desc" } },
+    ]    
+ }
 
