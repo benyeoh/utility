@@ -1,6 +1,11 @@
 #!/usr/bin/python
 # encoding: utf-8
 
+from elasticsearch import Elasticsearch
+
+import json
+import datetime
+'''
 search_query3 = {
                    "query" : {
                        "query_string" : {
@@ -55,177 +60,170 @@ search_query10 = {
                         },
                     },
                 }
+'''
 
-# GPS
-gps_unique_filter = ["_source.response.sol_timestamp_wk", "_source.response.sol_timestamp_ms"]
-gps_csv_filter = ["_source.meta.time", "_source.meta.spire_id", "_source.response.sol_timestamp_wk", "_source.response.sol_timestamp_ms"]
-query_gps_valid = {
-                   "query" : {
-                       "filtered" : {    
-                            "filter": {
-                                "bool" : {
-                                    "must" : [
-                                        { "term" : { "_type" : "gps_status" } },
-                                        { "term" : { "meta.spire_id.raw" : "lemur-2-chris" } },
-                                        { "range" : { "meta.time" : { "gte" : "2015-10-01", "format": "yyyy-MM-dd" } } }
-                                    ],
-                                          
-                                    "must_not" : [
-                                        { "term" : { "response.pos_x" : 0.0 } },
-                                    ]                                        
-                                }
-                            }              
+class ESQuery:
+    def __init__(self, name, pwd):
+        ES_URL = 'https://{}:{}@truffula.pvt.spire.com/elasticsearch'.format(name, pwd)    
+        self.es = Elasticsearch([ES_URL])
+        self.query = {}
+        
+    def _add_to_filters(self, key, value, filters):
+        if filters.has_key(key):
+            filters[key].extend(value)
+        else:
+            filters[key] = value
+        
+    def _make_query(self, filters):
+        _query = {
+           "query" : {
+               "filtered" : {    
+                    "filter": {
+                        "bool" : {
                         }
-                    },
-                    
-                    "sort": [
-                        { "meta.time" : { "order": "asc" } },
-                    ] 
+                    }              
                 }
-
-query_gps = {
-                   "query" : {
-                       "filtered" : {    
-                            "filter": {
-                                "bool" : {
-                                    "must" : [
-                                        { "term" : { "_type" : "gps_status" } },
-                                        { "term" : { "meta.spire_id.raw" : "lemur-2-jeroen" } },
-                                        { "range" : { "meta.time" : { "gte" : "2015-10-01", "format": "yyyy-MM-dd" } } }
-                                    ],
-                                          
-                                    #"must_not" : [
-                                    #    { "term" : { "response.pos_x" : 0.0 } },
-                                    #]                                        
-                                }
-                            }              
-                        }
-                    },
-                    
-                    "sort": [
-                        { "meta.time" : { "order": "asc" } },
-                    ] 
-                }
-                
-# ADACS
-adacs_csv_filter = ["_source.meta.time", "_source.meta.spire_id", "_source.response.acs_op_mode_str", "_source.response.angle_to_go_deg",
-                "_source.response.eclipse_flag", "_source.response.qbo_hat", "_source.response.omega_b"]
-adacs_csv_filter_desc = ["Beacon Time", "Spire ID", "ACS Operation Mode", "Angle-To-Go (commanded QBO vs estimated QBO) In Degrees",
-                     "Is In Eclipse?", "Estimated QBO", "Commanded QBO", "Roll Rate Body Frame (deg/s)"]
-
-query_adacs_nadir_sun = {
-    "query" : {
-        "filtered" : {
-            "filter": {
-                "bool" : {
-                    "must" : [
-                        { "term" : { "_type" : "adacs_status_std" } },
-                        { "term" : { "meta.spire_id.raw" : "lemur-2-peter" } },
-                        #{ "term" : { "response.acs_mode_str.raw" : "NORMAL" } },
-                        { "term" : { "response.eclipse_flag" : 0 } },
-                        { "term" : { "response.acs_op_mode_str.raw" : "NORMAL" } },
-                        #{ "range" : { "response.angle_to_go_deg" : { "lte" : 10.0 } } },
-                        { "range" : { "meta.time" : { "gte" : "2015-10-1", "format": "yyyy-MM-dd" } } }
-                    ],
-                    
-                    #"must_not" : [
-                    #    { "term" : { "response.acs_mode_str.raw" : "NORMAL" } },
-                    #]                   
-                }
-            }         
+            },
+            
+            "sort": [
+                { "meta.time" : { "order": "asc" } },
+            ] 
         }
-    },
+        
+        for key, value in filters.iteritems():
+            _query["query"]["filtered"]["filter"]["bool"][key] = value
+        
+        self.query = _query
+
+    def _filter_default(self, spire_id, from_date, to_date, filters):
+        _must = [
+                    { "term" : { "meta.spire_id.raw" : "%s" % spire_id } },
+                    { "range" : { "meta.time" : { "gte" : "%s" % from_date, "format": "yyyy-MM-dd" } } },
+                    { "range" : { "meta.time" : { "lte" : "%s" % to_date, "format": "yyyy-MM-dd" } } }
+                ]
+        
+        self._add_to_filters("must", _must, filters)            
+        
+    def _search(self, size_limit):
+        return self.es.search(index="spire", body=self.query, size=size_limit, request_timeout=300, timeout=300)
+
+    def _search_default(self, spire_id, from_date, to_date, filters, size_limit=10000000):
+        self._filter_default(spire_id, from_date, to_date, filters)
+        self._make_query(filters)
+        return self._search(size_limit)
     
-    "sort": [
-        { "meta.time" : { "order": "asc" } },
-    ] 
-}
-                         
-query_adacs_not_nadir_sun = {
-    "query" : {
-        "filtered" : {
-            "filter": {
-                "bool" : {
-                    "must" : [
-                        { "term" : { "_type" : "adacs_status_std" } },
-                        { "term" : { "meta.spire_id.raw" : "lemur-2-peter" } },
-                        #{ "term" : { "response.acs_mode_str.raw" : "NORMAL" } },
-                        { "term" : { "response.eclipse_flag" : 0 } },
-                        { "term" : { "response.acs_op_mode_str.raw" : "ACQUISITION" } },
-                        #{ "range" : { "response.angle_to_go_deg" : { "gte" : 10.0 } } },
-                        { "range" : { "meta.time" : { "gte" : "2015-10-1", "format": "yyyy-MM-dd" } } }
-                        #{ "range" : { "meta.time" : { "lte" : "2015-11-13", "format": "yyyy-MM-dd" } } }
-                    ],               
-                }
-            }         
-        }
-    },
+class GPSQuery(ESQuery):
+    def __init__(self, name, pwd):
+        ESQuery.__init__(self, name, pwd)
 
-    "sort": [
-        { "meta.time" : { "order": "asc" } },
-    ]    
-}
-                                 
-query_adacs_sun = {
-    "query" : {
-        "filtered" : {
-            "filter": {
-                "bool" : {
-                    "must" : [
-                        { "term" : { "_type" : "adacs_status_std" } },
-                        { "term" : { "meta.spire_id.raw" : "lemur-2-jeroen" } },
-                        #{ "term" : { "response.acs_mode_str.raw" : "NORMAL" } },
-                        { "term" : { "response.eclipse_flag" : 0 } },
-                        { "range" : { "meta.time" : { "gte" : "2015-10-1", "format": "yyyy-MM-dd" } } }
-                        #{ "range" : { "meta.time" : { "lte" : "2015-11-13", "format": "yyyy-MM-dd" } } }
-                    ],               
-                }
-            }         
-        }
-    },
+    def _filter_type(self, filters):
+        _must = [ { "term" : { "_type" : "gps_status" } } ]
+        self._add_to_filters("must", _must, filters)
 
-    "sort": [
-        { "meta.time" : { "order": "asc" } },
-    ]    
-}
+    def _filter_valid(self, filters):
+        _must_not = [ { "term" : { "response.pos_x" : 0.0 } } ]
+        self._add_to_filters("must_not", _must_not, filters)
+        self._filter_gps(filters)
+        
+    def search(self, spire_id, from_date, to_date, size_limit):
+        filters = {}
+        self._filter_gps(filters)
+        return self._search_default(spire_id, from_date, to_date, filters, size_limit)
 
-query_adacs_all = {
-    "query" : {
-        "filtered" : {
-            "filter": {
-                "bool" : {
-                    "must" : [
-                        { "term" : { "_type" : "adacs_status_std" } },
-                        { "term" : { "meta.spire_id.raw" : "lemur-2-joel" } },
-                        #{ "term" : { "response.acs_mode_str.raw" : "NORMAL" } },
-                        #{ "term" : { "response.eclipse_flag" : 0 } },
-                        { "range" : { "meta.time" : { "gte" : "2015-10-1", "format": "yyyy-MM-dd" } } }
-                        #{ "range" : { "meta.time" : { "lte" : "2015-11-13", "format": "yyyy-MM-dd" } } }
-                    ],
-                }
-            }         
-        }
-    },
+    def search_valid(self, spire_id, from_date, to_date, size_limit):
+        filters = {}
+        self._filter_type(filters)
+        self._filter_valid(filters)
+        return self._search_default(spire_id, from_date, to_date, filters, size_limit)
 
-    "sort": [
-        { "meta.time" : { "order": "asc" } },
-    ]    
-}
+class ADACSQuery(ESQuery):
+    def __init__(self, name, pwd):
+        ESQuery.__init__(self, name, pwd)
 
-query_raw_beacons = {
-    "query": {
-        "bool": {
-            "must": [
+    def _filter_type(self, filters):
+        _must = [ { "term" : { "_type" : "adacs_status_std" } } ]
+        self._add_to_filters("must", _must, filters)
+
+    def _filter_sun(self, filters):
+        _must = [ { "term" : { "response.eclipse_flag" : 0 } } ]
+        self._add_to_filters("must", _must, filters)
+
+    def _filter_acquisition(self, filters):
+        _must = [ { "term" : { "response.acs_op_mode_str.raw" : "ACQUISITION" } } ]
+        self._add_to_filters("must", _must, filters)
+
+    def _filter_nadir(self, filters):
+        _must = [ { "term" : { "response.acs_op_mode_str.raw" : "NORMAL" } } ]
+        self._add_to_filters("must", _must, filters)
+    
+    def search(self, spire_id, from_date, to_date, size_limit):
+        filters = {}
+        self._filter_type(filters)
+        return self._search_default(spire_id, from_date, to_date, filters, size_limit)
+
+    def search_nadir_sun(self, spire_id, from_date, to_date, size_limit):
+        filters = {}
+        self._filter_type(filters)
+        self._filter_sun(filters)
+        self._filter_nadir(filters)
+        return self._search_default(spire_id, from_date, to_date, filters)
+
+    def search_acquisition_sun(self, spire_id, from_date, to_date, size_limit):
+        filters = {}
+        self._filter_type(filters)
+        self._filter_sun(filters)
+        self._filter_acquisition(filters)
+        return self._search_default(spire_id, from_date, to_date, filters, size_limit)
+
+class RawBeaconsQuery(ESQuery):
+    def __init__(self, name, pwd):
+        ESQuery.__init__(self, name, pwd)
+    
+    def search(self, spire_id, from_date, to_date):
+        filters = {}
+        _must = [
                 { "constant_score": { "filter" : { "missing" : { "field" : "meta.beacon_processed" }}}},
-                #{ "term" : { "meta.satellite.raw" : "lemur-2-peter" }},
-                { "term" : { "_type" : "flowgraph" }},
-                { "range" : { "meta.time" : { "gte" : "2016-1-6", "format": "yyyy-MM-dd" } } }
+                { "term" : { "_type" : "flowgraph" }}
             ]
+        self._add_to_filters("must", _must, filters)
+        self._filter_default(spire_id, from_date, to_date, filters)
+        
+        _query = {
+            "query": {
+                "bool": {
+                    "must": _must,
+                }
+            },
+                             
+            "sort": [
+                { "meta.log_time" : { "order": "asc" } },
+            ]    
         }
-    },
-                     
-    "sort": [
-        { "meta.log_time" : { "order": "desc" } },
-    ]    
- }
+        
+        for key, value in enumerate(filters):
+            _query["query"]["bool"][key] = value
+        
+        self.query = _query
+        return self._search()
 
+
+def flatten_results(search_results, response_fields=None):
+    def _fetch_value(d, subfield):
+        for s in subfield.split("."):
+            d = d[s]
+        return d
+
+    res = []
+    for row in search_results['hits']['hits']:
+        d = {}
+        date = datetime.datetime.strptime(row['_source']['meta']['time'], "%Y-%m-%dT%H:%M:%S")
+        d['time'] = date.strftime('%Y-%m-%d %H:%M:%S')
+        if response_fields is not None:
+            for field in response_fields:
+                d[field] = _fetch_value(row['_source']['response'], field)
+        else:
+            for field, value in row['_source']['response'].iteritems():
+                d[field] = value
+                
+        res.append(d)
+    return res

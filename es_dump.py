@@ -1,12 +1,6 @@
 #!/usr/bin/python
 # encoding: utf-8
 
-import warnings
-import base64
-#from urllib3.exceptions import InsecureRequestWarning
-from elasticsearch import Elasticsearch
-from elasticsearch.client import IndicesClient
-
 import json
 import optparse
 import csv
@@ -14,32 +8,19 @@ import sys
 
 import es_queries
 
-def _fetch_value(d, subfield):
-    for s in subfield.split("."):
-        d = d[s]
-    return d
-
-def search(name, pwd, query, limit=50):
-    ES_USER = name
-    ES_PASSWD = pwd
-    ES_URL = 'https://{}:{}@truffula.pvt.spire.com/elasticsearch'.format(ES_USER, ES_PASSWD)
-    
-    es = Elasticsearch([ES_URL])
-    return es.search(index="spire", body=query, size=limit, request_timeout=300, timeout=300)
-
-def dump_csv(filename, data, fields, fields_desc=None):
+def dump_csv(filename, data, fields_desc=None):
     if sys.version_info >= (3,0,0):
         f = open(filename, 'w', newline='')
     else:
         f = open(filename, 'wb')
     
     f = csv.writer(f)
-    f.writerow(fields)
+    f.writerow(data[0].keys())
     if fields_desc is not None:
         f.writerow(fields_desc)
         
     for x in data:
-        f.writerow([_fetch_value(x, field) for field in fields])
+        f.writerow(x.values())
 
 def filter_rows_unique(data, unique_fields):
     filtered = []
@@ -59,15 +40,20 @@ if __name__ ==  '__main__':
                           metavar='NAME', default='spire')
     opt_parser.add_option('-p', '--pwd', dest='pwd', help='Login password', 
                           metavar='PWD', default='')
-        
+
+    opt_parser.add_option('-v', '--verbose', dest='verbose', help='Verbose output', 
+                          action='store_true', default=False)
+
+    opt_parser.add_option('-c', '--csv', dest='csv', help='Dump to csv', 
+                          metavar='CSV', default='')
     (opt_args, args) = opt_parser.parse_args()
     
-    matches = search(opt_args.name, opt_args.pwd, es_queries.query_adacs_sun, limit=1000000)
-    print('Array len: %d' % len(matches['hits']['hits']))
-
-    filtered_matches = matches['hits']['hits']#filter_rows_unique(matches['hits']['hits'], es_queries.gps_unique_filter)
-    #print(dir(matches))
-    #print(json.dumps(filtered_matches, indent=4, separators=(',', ':')))
-    dump_csv('data/jeroen_all_adacs_sun.csv', filtered_matches, es_queries.adacs_csv_filter)#, es_queries.adacs_csv_filter_desc)
-    print('Total hits: %d' % matches['hits']['total'])
-    #print(json.dumps(hits, indent=4, separators=(',', ':')))
+    query = es_queries.ADACSQuery(opt_args.name, opt_args.pwd)
+    matches = query.search_nadir_sun('lemur-2-peter', '2015-10-1', '2017-01-01', 100000000)
+    matches = es_queries.flatten_results(matches)#, ['eclipse_flag', 'qbo_hat', 'omega_b'])
+    
+    if opt_args.verbose:
+        print(json.dumps(matches, indent=4, separators=(',', ':')))
+    
+    if opt_args.csv != '':
+        dump_csv(opt_args.csv, matches)
