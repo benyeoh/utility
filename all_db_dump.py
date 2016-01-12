@@ -8,6 +8,7 @@ import sys
 import datetime
 
 import es_queries
+import influx_queries
 
 def dump_csv(filename, data, fields_desc=None):
     if sys.version_info >= (3,0,0):
@@ -57,15 +58,26 @@ if __name__ ==  '__main__':
                           metavar='CSV', default='')
     (opt_args, args) = opt_parser.parse_args()
     
+    INFLUX_URL = 'https://calliope.pvt.spire.com/influxdb'
+    INFLUX_DB = 'telemetry'
+    
     query_types = { 
-                    'gps' : (es_queries.GPSQuery(opt_args.name, opt_args.pwd), ''),
-                    'gps_valid' : (es_queries.GPSQuery(opt_args.name, opt_args.pwd), 'valid'),
-                    'adacs' : (es_queries.ADACSQuery(opt_args.name, opt_args.pwd), ''),
-                    'adacs_acquisition_sun' : (es_queries.ADACSQuery(opt_args.name, opt_args.pwd), 'acquisition_sun'),
-                    'adacs_nadir_sun' : (es_queries.ADACSQuery(opt_args.name, opt_args.pwd), 'nadir_sun'),
+                    'adacs' : { 
+                                'es' : (es_queries.ADACSQuery(opt_args.name, opt_args.pwd), ''), 
+                                'influx' : (influx_queries.ADACSQuery(INFLUX_URL, INFLUX_DB), ''),
+                            },
+                    
+                    'gps' : { 
+                                'es' : (es_queries.GPSQuery(opt_args.name, opt_args.pwd), ''), 
+                                'influx' : (influx_queries.GPSQuery(INFLUX_URL, INFLUX_DB), ''),
+                        }
                 }
      
-    query = query_types[opt_args.query_type][0]
+    query_es = query_types[opt_args.query_type]['es'][0]
+    query_es_variant = query_types[opt_args.query_type]['es'][1]
+    query_influx = query_types[opt_args.query_type]['influx'][0]
+    query_influx_variant = query_types[opt_args.query_type]['influx'][1]
+    
     matches = query.search(opt_args.spire_id, opt_args.start_date, opt_args.end_date, 100000000, variant=query_types[opt_args.query_type][1])
     fields = None
     if opt_args.fields:

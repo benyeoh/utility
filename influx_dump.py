@@ -1,61 +1,26 @@
 #!/usr/bin/python
 # encoding: utf-8
 
-import warnings
-import base64
-
-import requests
-
 import json
 import optparse
 import csv
 import sys
-
-def _fetch_value(d, subfield):
-    for s in subfield.split("."):
-        d = d[s]
-    return d
-
-def _get_response(url, db, query):
-    search_data = { 'q' : query, 'db' : db }
-    init_url = '/'.join([url, 'query?pretty=true'])
-    res = requests.get('&'.join([init_url, 'db=%s' % db, 'q=%s' % query]))
-    print(res.url)
-    return json.loads(res.text)
-
-def search(url, db, table, fields, spire_id, start, end):
-    query = 'SELECT %s FROM /%s.*/ '\
-            'WHERE spire_id=\'%s\'' \
-            'AND time >= \'%s\' ' \
-            'AND time <= \'%s\' ' \
-            'ORDER BY time ASC'
-    query = query % (','.join(fields), table, spire_id, start, end)
-    return _get_response(url, db, query)
-    
-def dump_csv(filename, data, fields, fields_desc=None):
+import datetime
+import influx_queries
+  
+def dump_csv(filename, data, fields_desc=None):
     if sys.version_info >= (3,0,0):
         f = open(filename, 'w', newline='')
     else:
         f = open(filename, 'wb')
     
     f = csv.writer(f)
-    f.writerow(fields)
+    f.writerow(data[0].keys())
     if fields_desc is not None:
         f.writerow(fields_desc)
         
     for x in data:
-        f.writerow([_fetch_value(x, field) for field in fields])
-
-def filter_rows_unique(data, unique_fields):
-    filtered = []
-    uniques = {}
-    for x in data:
-        check_unique = tuple([_fetch_value(x, field) for field in unique_fields])
-        if check_unique not in uniques:
-            uniques[check_unique] = True
-            filtered.append(x)
-    
-    return filtered
+        f.writerow(x.values())
         
 if __name__ ==  '__main__':
     # Handle option parsing
@@ -64,13 +29,35 @@ if __name__ ==  '__main__':
                           metavar='URL', default='https://calliope.pvt.spire.com/influxdb')
     opt_parser.add_option('-i', '--spire-id', dest='spire_id', help='Spire ID of filter', 
                           metavar='SPIRE_ID', default='lemur-2-chris')
-    opt_parser.add_option('-n', '--name', dest='name', help='Login name', 
-                          metavar='NAME', default='spire')
-    opt_parser.add_option('-p', '--pwd', dest='pwd', help='Login password', 
-                          metavar='PWD', default='')
-        
+    opt_parser.add_option('-s', '--start-date', dest='start_date', help='Start date of search (ex \'2015-10-01\'', 
+                          metavar='START_DATE', default='2015-10-01')
+    opt_parser.add_option('-e', '--end-date', dest='end_date', help='End date of search (ex \'2015-10-01\'', 
+                          metavar='END_DATE', default=datetime.datetime.now().strftime('%Y-%m-%d'))   
+    opt_parser.add_option('-f', '--fields', dest='fields', help='Comma delimited fields filter (ex, \'pos_x,pos_y\')',
+                          metavar='FIELDS', default='')                             
+    opt_parser.add_option('-v', '--verbose', dest='verbose', help='Verbose output', 
+                          action='store_true', default=False)
+    opt_parser.add_option('-q', '--query-type', dest='query_type', help='Query type (ex adacs, gps)', 
+                          metavar='QUERY_TYPE', default='adacs')    
+    opt_parser.add_option('-c', '--csv', dest='csv', help='Dump to csv', 
+                          metavar='CSV', default='')
     (opt_args, args) = opt_parser.parse_args()
-        
-    res = search(opt_args.url, 'telemetry', 'gps_pos_vel', ['pos_x', 'pos_y'], opt_args.spire_id, '2015-10-15', '2015-12-10')
     
-    print(json.dumps(res['results'][0]['series'][0]['values'], indent=4, separators=(',', ':')))
+    query_types = { 
+                    'gps' : (influx_queries.GPSQuery(opt_args.url, 'telemetry'), ''),
+                    'adacs' : (influx_queries.ADACSQuery(opt_args.url, 'telemetry'), ''),
+                }
+    
+    query = query_types[opt_args.query_type][0]
+    res = query.search(opt_args.spire_id, opt_args.start_date, opt_args.end_date, variant=query_types[opt_args.query_type][1])
+    fields = None
+    if opt_args.fields:
+        fields = opt_args.fields.split(',')
+    res_data = influx_queries.flatten_results(json.loads(res.text), fields)
+    
+    if opt_args.verbose:
+        print(json.dumps(res_data, indent=4, separators=(',', ':')))
+        print('Length: %d' % (len(res_data) if res_data is not None else 0))
+    
+    if opt_args.csv != '':
+        dump_csv(opt_args.csv, matches)

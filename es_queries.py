@@ -123,11 +123,15 @@ class GPSQuery(ESQuery):
     def _filter_valid(self, filters):
         _must_not = [ { "term" : { "response.pos_x" : 0.0 } } ]
         self._add_to_filters("must_not", _must_not, filters)
-        self._filter_gps(filters)
         
-    def search(self, spire_id, from_date, to_date, size_limit):
+    def search(self, spire_id, from_date, to_date, size_limit, variant=''):
+        if variant != '':
+            func = getattr(self, 'search_%s' % variant)
+            if func is not None:
+                return func(spire_id, from_date, to_date, size_limit)
+
         filters = {}
-        self._filter_gps(filters)
+        self._filter_type(filters)
         return self._search_default(spire_id, from_date, to_date, filters, size_limit)
 
     def search_valid(self, spire_id, from_date, to_date, size_limit):
@@ -156,7 +160,12 @@ class ADACSQuery(ESQuery):
         _must = [ { "term" : { "response.acs_op_mode_str.raw" : "NORMAL" } } ]
         self._add_to_filters("must", _must, filters)
     
-    def search(self, spire_id, from_date, to_date, size_limit):
+    def search(self, spire_id, from_date, to_date, size_limit, variant=''):
+        if variant != '':
+            func = getattr(self, 'search_%s' % variant)
+            if func is not None:
+                return func(spire_id, from_date, to_date, size_limit)
+                
         filters = {}
         self._filter_type(filters)
         return self._search_default(spire_id, from_date, to_date, filters, size_limit)
