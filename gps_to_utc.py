@@ -3,11 +3,11 @@
 
 import datetime
 
-gps_wk = 1867
-gps_ms = 435630000
+def convert(wk, ms):
+    LEAP_SECONDS = 17
+    return datetime.datetime.utcfromtimestamp(wk * 604800 + ms / 1000.0 + 315964800 - LEAP_SECONDS)
 
-print(
-    datetime.datetime.utcfromtimestamp(
-        gps_wk * 604800 + gps_ms / 1000.0 + 315964800 - 17
-    ).strftime('%Y-%m-%d %H:%M:%S')
-)
+if __name__ == '__main__':    
+    gps_wk = 1867
+    gps_ms = 435630000
+    print(convert(gps_wk, gps_ms).strftime('%Y-%m-%d %H:%M:%S'))
