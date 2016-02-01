@@ -12,7 +12,6 @@ import random
 import gzip
     
 import math
-import numpy
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.cm as cmx
@@ -73,20 +72,6 @@ def extract_data_from_telemetry_zipped_json(filepath):
                 prn[prn_slot].append({'time':datetime.datetime.utcfromtimestamp(timestamp), 'cn0':prn_cn0})
     
     return prn
-
-def dump_csv(filename, data, fields_desc=None):
-    if sys.version_info >= (3,0,0):
-        f = open(filename, 'w', newline='')
-    else:
-        f = open(filename, 'wb')
-    
-    f = csv.writer(f)
-    f.writerow(data[0].keys())
-    if fields_desc is not None:
-        f.writerow(fields_desc)
-        
-    for x in data:
-        f.writerow(x.values())
         
 if __name__ ==  '__main__':
     # Handle option parsing
